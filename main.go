@@ -20,7 +20,7 @@ var stop = flag.Bool("s", false, "disable all proxies")
 func main() {
 	flag.Parse()
 
-	if bypass != nil {
+	if *bypass != "" {
 		dms := strings.Split(*bypass, ",")
 		sysproxy.SetBypass(dms)
 	}

@@ -15,7 +15,8 @@ var bypass = flag.String("bypass", "", "bypass join by ,")
 var httpProxy = flag.String("http", "", "http proxy server and port")
 var httpsProxy = flag.String("https", "", "https proxy server and port")
 var socksProxy = flag.String("socks", "", "socks proxy server and port")
-var stop = flag.Bool("s", false, "disable all proxies")
+var stop = flag.Bool("stop", false, "disable all proxies")
+var show = flag.Bool("show", false, "show all proxies")
 
 func main() {
 	flag.Parse()
@@ -67,9 +68,16 @@ func main() {
 		}
 	}
 
-	if stop != nil && *stop {
+	if *stop {
 		sysproxy.StopProxy(C.HTTP)
 		sysproxy.StopProxy(C.SOCKS)
 		sysproxy.StopProxy(C.HTTPS)
+	}
+
+	if *show {
+		out, err := sysproxy.ShowProxy()
+		if err == nil {
+			fmt.Println(out)
+		}
 	}
 }

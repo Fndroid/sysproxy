@@ -2,8 +2,10 @@ package sysproxy
 
 import (
 	"errors"
+	"fmt"
 	"os/exec"
 	"strconv"
+	"strings"
 
 	C "github.com/Fndroid/sysproxy/constant"
 )
@@ -56,4 +58,25 @@ func StopProxy(pt C.ProxyType) error {
 	args := []string{pt.StopCommand(), nt.String(), "off"}
 	cmd := exec.Command(COMMAND, args...)
 	return cmd.Run()
+}
+
+func ShowProxy() (string, error) {
+	nt := networkType()
+	if nt == C.Unknown {
+		return "", errors.New("unknown network type")
+	}
+	result := []string{}
+	for _, pt := range []C.ProxyType{C.HTTP, C.HTTPS, C.SOCKS} {
+		args := []string{pt.ShowCommand(), nt.String()}
+		cmd := exec.Command(COMMAND, args...)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			continue
+		}
+		o := format(string(out))
+		if o.Enabled {
+			result = append(result, fmt.Sprintf("%s=%s:%d", pt.String(), o.Server, o.Port))
+		}
+	}
+	return strings.Join(result, "\n"), nil
 }

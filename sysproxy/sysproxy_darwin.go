@@ -8,32 +8,50 @@ import (
 	"strings"
 
 	C "github.com/Fndroid/sysproxy/constant"
+	N "github.com/Fndroid/sysproxy/network"
 )
 
 const COMMAND = "networksetup"
 
-func networkType() C.NetworkType {
-	for _, t := range []C.NetworkType{C.Ethernet, C.WiFi, C.ThunderboltEthernet} {
-		if testWebProxy(t) {
-			return t
+func networkType() (N.NetworkType, error) {
+	cmd := exec.Command(COMMAND, "-listnetworkserviceorder")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return N.NetworkType{}, err
+	}
+	for _, nt := range N.ParseFromText(string(out)) {
+		err := testNetwork(nt)
+		if err == nil {
+			return nt, nil
 		}
 	}
-	return C.Unknown
+	return N.NetworkType{}, errors.New("unknown network type")
 }
 
-func testWebProxy(nt C.NetworkType) bool {
-	cmd := exec.Command(COMMAND, "-getwebproxy", nt.String())
-	err := cmd.Run()
+func testNetwork(nt N.NetworkType) error {
+	grep := exec.Command("grep", nt.Device)
+	netstat := exec.Command("netstat", "-nr")
+	pipe, err := netstat.StdoutPipe()
 	if err != nil {
-		return false
+		return err
 	}
-	return true
+	defer pipe.Close()
+	grep.Stdin = pipe
+	netstat.Start()
+	out, err := grep.Output()
+	if err != nil {
+		return err
+	}
+	if strings.Contains(string(out), "default") {
+		return nil
+	}
+	return errors.New("testNetwork failed")
 }
 
 func SetBypass(domains []string) error {
-	nt := networkType()
-	if nt == C.Unknown {
-		return errors.New("unknown network type")
+	nt, err := networkType()
+	if err != nil {
+		return err
 	}
 	args := append([]string{"-setproxybypassdomains", nt.String()}, domains...)
 	cmd := exec.Command(COMMAND, args...)
@@ -41,9 +59,9 @@ func SetBypass(domains []string) error {
 }
 
 func SetProxy(pt C.ProxyType, server string, port int) error {
-	nt := networkType()
-	if nt == C.Unknown {
-		return errors.New("unknown network type")
+	nt, err := networkType()
+	if err != nil {
+		return err
 	}
 	args := []string{pt.SetCommand(), nt.String(), server, strconv.Itoa(port)}
 	cmd := exec.Command(COMMAND, args...)
@@ -51,9 +69,9 @@ func SetProxy(pt C.ProxyType, server string, port int) error {
 }
 
 func StopProxy(pt C.ProxyType) error {
-	nt := networkType()
-	if nt == C.Unknown {
-		return errors.New("unknown network type")
+	nt, err := networkType()
+	if err != nil {
+		return err
 	}
 	args := []string{pt.StopCommand(), nt.String(), "off"}
 	cmd := exec.Command(COMMAND, args...)
@@ -61,9 +79,9 @@ func StopProxy(pt C.ProxyType) error {
 }
 
 func ShowProxy() (string, error) {
-	nt := networkType()
-	if nt == C.Unknown {
-		return "", errors.New("unknown network type")
+	nt, err := networkType()
+	if err != nil {
+		return "", err
 	}
 	result := []string{}
 	for _, pt := range []C.ProxyType{C.HTTP, C.HTTPS, C.SOCKS} {

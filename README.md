@@ -15,4 +15,5 @@ Usage of ./sysproxy:
   -socks string
         socks proxy server and port
   -stop
+        disable all proxies
 ```

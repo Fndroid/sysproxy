@@ -13,19 +13,20 @@ import (
 
 const COMMAND = "networksetup"
 
-func networkType() (N.NetworkType, error) {
+func networkTypes() ([]N.NetworkType, error) {
 	cmd := exec.Command(COMMAND, "-listnetworkserviceorder")
 	out, err := cmd.CombinedOutput()
+	nts := []N.NetworkType{}
 	if err != nil {
-		return N.NetworkType{}, err
+		return nts, err
 	}
 	for _, nt := range N.ParseFromText(string(out)) {
 		err := testNetwork(nt)
 		if err == nil {
-			return nt, nil
+			nts = append(nts, nt)
 		}
 	}
-	return N.NetworkType{}, errors.New("unknown network type")
+	return nts, nil
 }
 
 func testNetwork(nt N.NetworkType) error {
@@ -49,52 +50,68 @@ func testNetwork(nt N.NetworkType) error {
 }
 
 func SetBypass(domains []string) error {
-	nt, err := networkType()
+	nts, err := networkTypes()
 	if err != nil {
 		return err
 	}
-	args := append([]string{"-setproxybypassdomains", nt.String()}, domains...)
-	cmd := exec.Command(COMMAND, args...)
-	return cmd.Run()
+	for _, nt := range nts {
+		args := append([]string{"-setproxybypassdomains", nt.String()}, domains...)
+		cmd := exec.Command(COMMAND, args...)
+		cmd.Run()
+	}
+	return nil
 }
 
 func SetProxy(pt C.ProxyType, server string, port int) error {
-	nt, err := networkType()
+	nts, err := networkTypes()
 	if err != nil {
 		return err
 	}
-	args := []string{pt.SetCommand(), nt.String(), server, strconv.Itoa(port)}
-	cmd := exec.Command(COMMAND, args...)
-	return cmd.Run()
+	for _, nt := range nts {
+		args := []string{pt.SetCommand(), nt.String(), server, strconv.Itoa(port)}
+		cmd := exec.Command(COMMAND, args...)
+		cmd.Run()
+	}
+	return nil
 }
 
 func StopProxy(pt C.ProxyType) error {
-	nt, err := networkType()
+	nts, err := networkTypes()
 	if err != nil {
 		return err
 	}
-	args := []string{pt.StopCommand(), nt.String(), "off"}
-	cmd := exec.Command(COMMAND, args...)
-	return cmd.Run()
+	for _, nt := range nts {
+		args := []string{pt.StopCommand(), nt.String(), "off"}
+		cmd := exec.Command(COMMAND, args...)
+		cmd.Run()
+	}
+	return nil
 }
 
 func ShowProxy() (string, error) {
-	nt, err := networkType()
+	nts, err := networkTypes()
 	if err != nil {
 		return "", err
 	}
 	result := []string{}
-	for _, pt := range []C.ProxyType{C.HTTP, C.HTTPS, C.SOCKS} {
-		args := []string{pt.ShowCommand(), nt.String()}
-		cmd := exec.Command(COMMAND, args...)
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			continue
+	for _, nt := range nts {
+		str := ""
+		for _, pt := range []C.ProxyType{C.HTTP, C.HTTPS, C.SOCKS} {
+			args := []string{pt.ShowCommand(), nt.String()}
+			cmd := exec.Command(COMMAND, args...)
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				continue
+			}
+			o := format(string(out))
+			if o.Enabled {
+				if str == "" {
+					str = fmt.Sprintf("%s: ", nt.String())
+				}
+				str += fmt.Sprintf("%s=%s:%d; ", pt.String(), o.Server, o.Port)
+			}
 		}
-		o := format(string(out))
-		if o.Enabled {
-			result = append(result, fmt.Sprintf("%s=%s:%d", pt.String(), o.Server, o.Port))
-		}
+		result = append(result, str)
 	}
 	return strings.Join(result, "\n"), nil
 }
